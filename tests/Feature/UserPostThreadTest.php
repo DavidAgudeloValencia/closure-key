@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\PostThread;
+use App\Models\Relationship;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Tests\TestCase;
@@ -44,6 +45,23 @@ test('post thread delete', function () {
     expect($row)->toBe(1);
 });
 
+test('read related user posts', function () {
+    $follower = User::factory()->create();
+    $followed_1 = User::factory()->create();
+    $followed_2 = User::factory()->create();
+
+    follow($follower->id, $followed_1->id);
+    follow($follower->id, $followed_2->id);
+
+    $content = fake()->realText();
+    PostThread($followed_1->id, $content);
+    PostThread($followed_2->id, $content);
+
+    $rows = getPostThreadUserRelated($follower->id);
+    expect($rows)->not()->toBeNull();
+    expect($rows)->toHaveCount(2);
+});
+
 function PostThread($user_id, $content, $post_id = null, $file_content = '')
 {
     $post_thread =  new PostThread();
@@ -61,6 +79,20 @@ function PostThread($user_id, $content, $post_id = null, $file_content = '')
 
 function PostThreadDelete($user_id, $post_id)
 {
-    $find_post = PostThread::where('user_id', $user_id)->where('id', $post_id); 
-    return $find_post->delete(); 
+    $find_post = PostThread::where('user_id', $user_id)->where('id', $post_id);
+    return $find_post->delete();
+}
+
+function follow($follower_id, $followed_id)
+{
+
+    $relation =  new Relationship();
+
+    $relation->updateOrCreate(['follower_id' => $follower_id, 'followed_id' => $followed_id, 'action' => true]);
+}
+
+function getPostThreadUserRelated($user_id)
+{
+    $users_relation = Relationship::where('follower_id', $user_id)->where('action', true)->pluck('followed_id');
+    return PostThread::whereIn('user_id', $users_relation)->get();
 }
